@@ -26,59 +26,88 @@ Consider the following URL/Response body pairs as tests:
   http://localhost:8080/               => <html>Here's how to use this page...</html>
 ```
 
-To submit your homework:
-
-  * Fork this repository (Session03).
-  * Edit this file to meet the homework requirements.
-  * Your script should be runnable using `$ python calculator.py`
-  * When the script is running, I should be able to view your
-    application in my browser.
-  * I should also be able to see a home page (http://localhost:8080/)
-    that explains how to perform calculations.
-  * Commit and push your changes to your fork.
-  * Submit a link to your Session03 fork repository!
-
-
 """
+import traceback
 
+def home():
+    page = """
+        <h1>WSGI Calculator</h1>
+        <p>A simple calculator to perform the following functions with two numbers: <b>add</b>, <b>subtract</b>, <b>multiply</b>, <b>divide</b></p>
+        <p><b><i>To Use</i></b>:  Append the function selected to the URL followed by the first and second operand</p>
+        <p><i>Example</i>:  http://localhost:8080/<u>divide</u>/<u>22</u>/<u>11</u></p>
+    """
+    return page
 
 def add(*args):
     """ Returns a STRING with the sum of the arguments """
 
-    # TODO: Fill sum with the correct value, based on the
-    # args provided.
-    sum = "0"
+    return str(sum(map(int, args)))
 
-    return sum
+def subtract(*args):
+    """ Returns a STRING with the difference of the arguments """
 
-# TODO: Add functions for handling more arithmetic operations.
+    return str(int(args[0])-int(args[1]))
+
+def multiply(*args):
+    """ Returns a STRING with the product of the arguments """
+
+    return str(int(args[0])*int(args[1]))
+
+def divide(*args):
+    """ Returns a STRING with the quotient of the arguments """
+
+    quotient, remainder = divmod(*map(int, args))
+    return str(quotient)
 
 def resolve_path(path):
     """
     Should return two values: a callable and an iterable of
     arguments.
     """
+    funcs = {
+        '': home,
+        'add': add,
+        'subtract': subtract,
+        'multiply': multiply,
+        'divide': divide,
+    }
+    path = path.strip('/').split('/')
+    func_name = path[0]
+    args = path[1:]
 
-    # TODO: Provide correct values for func and args. The
-    # examples provide the correct *syntax*, but you should
-    # determine the actual values of func and args using the
-    # path.
-    func = add
-    args = ['25', '32']
+    try:
+        func = funcs[func_name]
+    except KeyError:
+        raise NameError
 
     return func, args
 
 def application(environ, start_response):
-    # TODO: Your application code from the book database
-    # work here as well! Remember that your application must
-    # invoke start_response(status, headers) and also return
-    # the body of the response in BYTE encoding.
-    #
-    # TODO (bonus): Add error handling for a user attempting
-    # to divide by zero.
-    pass
+    headers = [('Content-type', 'text/html')]
+    try:
+        path = environ.get('PATH_INFO', None)
+        if path is None:
+            raise NameError
+        func, args = resolve_path(path)
+        # body = func(*args)
+        body = func(*args)
+        status = "200 OK"
+    except NameError:
+        status = "404 Not Found"
+        body = "<h1>Not Found</h1>"
+    except ZeroDivisionError:
+        status = "400 Bad Request"
+        body = "<h1>Can't Divide By Zero</h1>"
+    except Exception:
+        status = "500 Internal Server Error"
+        body = "<h1>Internal Server Error</h1>"
+        print(traceback.format_exc())
+    finally:
+        headers.append(('Content-length', str(len(body))))
+        start_response(status, headers)
+        return [body.encode('utf8')]
 
 if __name__ == '__main__':
-    # TODO: Insert the same boilerplate wsgiref simple
-    # server creation that you used in the book database.
-    pass
+    from wsgiref.simple_server import make_server
+    srv = make_server('localhost', 8080, application)
+    srv.serve_forever()
